@@ -67,7 +67,7 @@
 #include <linux/kfifo.h>
 
 
-#define RFBB_DRIVER_VERSION "0.05"
+#define RFBB_DRIVER_VERSION "0.07"
 #define RFBB_DRIVER_NAME "rfbb"
 
 #define MAX_RFBB_DEVS 1 /* One device only */
@@ -661,6 +661,7 @@ static void rfbb_setup_cdev(struct cdev *dev, int minor,
 	if (err)
 		printk(KERN_NOTICE "Error %d adding rfbb %d", err, minor);
 }
+static struct class *myclass = NULL;
 
 static int rfbb_init(void)
 {
@@ -683,6 +684,18 @@ static int rfbb_init(void)
               printk(KERN_WARNING "rfbb: can't get major %d\n", rfbb_major);
               return result;
       }   
+
+      if ((myclass = class_create(THIS_MODULE, "rfbbdrv")) == NULL)    //$ls /sys/class
+          {
+              unregister_chrdev_region(dev, 1);
+              return -1;
+          }
+          if (device_create(myclass, NULL, dev, NULL, "rfbb") == NULL) //$ls /dev/
+          {
+              class_destroy(myclass);
+              unregister_chrdev_region(dev, 1);
+              return -1;
+          }
 
 	rfbb_setup_cdev(rfbbDevs, 0, &rfbb_fops);
 
