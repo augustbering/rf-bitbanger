@@ -662,12 +662,12 @@ static void rfbb_setup_cdev(struct cdev *dev, int minor,
 		printk(KERN_NOTICE "Error %d adding rfbb %d", err, minor);
 }
 static struct class *myclass = NULL;
-
+static dev_t dev = 0;
 static int rfbb_init(void)
 {
 
 	int result;
-	dev_t dev = 0;
+
 
 	/*
 	 * Dynamic major if not set otherwise.
@@ -729,6 +729,9 @@ exit_rfbb_exit:
 
 static void rfbb_exit_module(void)
 {
+	device_destroy(myclass,dev);
+	class_destroy(myclass);
+
 	cdev_del(rfbbDevs);
 	unregister_chrdev_region(MKDEV(rfbb_major, 0), 1);
 	if(hardware[type].tx_pin != RFBB_NO_GPIO_PIN)
@@ -746,7 +749,14 @@ static void rfbb_exit_module(void)
 		gpio_unexport(hardware[type].rx_pin);
 		gpio_free(hardware[type].rx_pin);			
 	}
-	dprintk("cleaned up module\n");
+
+	if(hardware[type].rf_enable_pin != RFBB_NO_GPIO_PIN)
+	{
+		gpio_unexport(hardware[type].rf_enable_pin);
+		gpio_free(hardware[type].rf_enable_pin);			
+	}
+	printk(KERN_INFO
+	       RFBB_DRIVER_NAME " " RFBB_DRIVER_VERSION " removed\n");
 }
 
 
