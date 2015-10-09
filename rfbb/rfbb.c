@@ -58,7 +58,6 @@
 #include <linux/delay.h>
 #include <linux/poll.h>
 #include <linux/platform_device.h>
-#include <asm/system.h>
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/fcntl.h>
@@ -67,7 +66,8 @@
 #include <linux/kfifo.h>
 
 
-#define RFBB_DRIVER_VERSION "0.07"
+
+#define RFBB_DRIVER_VERSION "0.08"
 #define RFBB_DRIVER_NAME "rfbb"
 
 #define MAX_RFBB_DEVS 1 /* One device only */
@@ -166,7 +166,7 @@ static struct timeval lasttv = {0, 0};
 /* static struct lirc_buffer rbuf; */
 
 /* Use FIFO to store received pulses */ 
-static DEFINE_KFIFO(rxfifo, int, RBUF_LEN);
+static DEFINE_KFIFO(rxfifo, lirc_t, RBUF_LEN);
 
 static int wbuf[WBUF_LEN];
 
@@ -222,6 +222,7 @@ static void set_rx_mode(void)
 	switch(hw_mode)
 	{
 		case HW_MODE_POWER_DOWN:
+
 			/* Note this sequence is only needed for AUREL RTX-MID */
 			if((hardware[type].rf_enable_pin != RFBB_NO_GPIO_PIN) && (hardware[type].tx_ctrl_pin != RFBB_NO_GPIO_PIN))
 			{
@@ -315,6 +316,7 @@ static irqreturn_t irq_handler(int i, void *blah)
 	static int old_status = -1;
 	static int counter = 0; /* to find burst problems */ 
 	/* static int intCount = 0; */
+	const int minTime_us=0;//TODO: This should probably be configurable with ioctl
 	
 
 	status = gpio_get_value(hardware[type].rx_pin);
@@ -370,9 +372,12 @@ static irqreturn_t irq_handler(int i, void *blah)
 		/* frbwrite(status ? data : (data|PULSE_BIT)); */
 		lasttv = tv;
 		old_status = status;
-		data = status ? data : (data | LIRC_MODE2_PULSE);
-		/* dprintk("irq_handler. Nr: %d. Pin: %d time: %ld\n", ++intCount, status, (long)(data & PULSE_MASK));*/
-		kfifo_put(&rxfifo, &data);
+
+		if (data>minTime_us){
+			data = status ? data : (data | LIRC_MODE2_PULSE);
+			/* dprintk("irq_handler. Nr: %d. Pin: %d time: %ld\n", ++intCount, status, (long)(data & PULSE_MASK));*/
+			kfifo_put(&rxfifo, data);
+		}
 		/* wake_up_interruptible(&rbuf.wait_poll); */
 	}
 	else /* could have been a spike */
@@ -393,7 +398,6 @@ static int hardware_init(void)
 	int err = 0;
 	
 	local_irq_save(flags);
-
 	/* First of all, disable all interrupts */
 
 	if (type == RFBB_GPIO) {
@@ -667,7 +671,7 @@ static int rfbb_init(void)
 {
 
 	int result;
-
+	hw_mode = HW_MODE_POWER_DOWN;
 
 	/*
 	 * Dynamic major if not set otherwise.
